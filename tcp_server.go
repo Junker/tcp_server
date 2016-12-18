@@ -15,6 +15,9 @@ type Client struct {
 	sync.Mutex
 	conn      net.Conn
 	connected bool
+	ip        string
+	r         *bufio.Reader
+	w         *bufio.Writer
 	id        float64
 	server    *server
 }
@@ -33,15 +36,24 @@ type server struct {
 
 // Read client data
 func (c *Client) listen() {
-	reader := bufio.NewReader(c.conn)
+	c.Lock()
+	r := c.r
+	c.Unlock()
 	for {
-		message, err := reader.ReadString('\n')
+		message, err := r.ReadString('\n')
 		if err != nil {
 			c.close()
 			return
 		}
 		c.server.onNewMessage(c, strings.Trim(message, "\r\n"))
 	}
+}
+
+// Get clients IP address
+func (c *Client) IP() string {
+	c.Lock()
+	defer c.Unlock()
+	return c.ip
 }
 
 // Send text message to client
@@ -51,7 +63,8 @@ func (c *Client) Send(message string) error {
 		return errors.New("empty string invalid")
 	}
 	c.Lock()
-	_, err := c.conn.Write([]byte(message))
+	c.w.WriteString(message)
+	err := c.w.Flush()
 	c.Unlock()
 	if err != nil {
 		c.close()
@@ -85,7 +98,7 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 }
 
 // Returns the client ID
-func (c *Client) Id() int64 {
+func (c *Client) ID() int64 {
 	c.Lock()
 	defer c.Unlock()
 	return int64(c.id)
@@ -135,8 +148,12 @@ func (s *server) Listen() error {
 	defer listener.Close()
 	for {
 		conn, _ := listener.Accept()
+		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 		client := &Client{
 			conn:   conn,
+			ip:     ip,
+			r:      bufio.NewReader(conn),
+			w:      bufio.NewWriter(conn),
 			server: s,
 		}
 		s.add(client)
@@ -163,6 +180,11 @@ func (s *server) clients_sorted() []*Client {
 		clients = append(clients, s.clients[id])
 	}
 	return clients
+}
+
+// Returns the clients in there connection order.
+func (s *server) Clients() []*Client {
+	return s.clients_sorted()
 }
 
 func (s *server) add(c *Client) {
