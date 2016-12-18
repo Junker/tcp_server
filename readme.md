@@ -20,13 +20,17 @@ import "github.com/tech10/tcp_server"
 func main() {
 	server := tcp_server.New("localhost:9999")
 
-	server.OnNewClient(func(c *tcp_server.Client) {
+	server.OnNewClient(func(c *tcp_server.Client) bool {
 		// new client connected
 		// lets send some message
 		c.Send("Hello")
+		//Now let's accept the connection.
+		return true
 	})
 	server.OnNewMessage(func(c *tcp_server.Client, message string) {
 		// new message received
+		// Let's broadcast it to everyone.
+		c.SendAll(message, nil)
 	})
 	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
 		// connection with client lost

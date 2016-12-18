@@ -19,8 +19,9 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	var newClient bool
 	var connectinClosed bool
 
-	server.OnNewClient(func(c *Client) {
+	server.OnNewClient(func(c *Client) bool {
 		newClient = true
+		return true
 	})
 	server.OnNewMessage(func(c *Client, message string) {
 		messageReceived = true
@@ -46,7 +47,7 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	Convey("Messages should be equal", t, func() {
-		So(messageText, ShouldEqual, "Test message\n")
+		So(messageText, ShouldEqual, "Test message")
 	})
 	Convey("It should receive new client callback", t, func() {
 		So(newClient, ShouldEqual, true)
