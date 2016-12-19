@@ -38,19 +38,38 @@ type Server struct {
 	onNewMessage             func(c *Client, message string)
 }
 
-// Read client data
+// Read a single line of data from the client without calling the callback function.
+func (c *Client) Readln() (string, error) {
+	return c.readln()
+}
+
+func (c *Client) readln() (string, error) {
+	c.Lock()
+	if !c.connected {
+		c.Unlock()
+		return "", errors.New("client not connected")
+	}
+	r := c.r
+	c.Unlock()
+	message, err := r.ReadString('\n')
+	if err != nil {
+		c.close()
+		return "", err
+	}
+	return strings.Trim(message, "\r\n"), err
+}
+
+// Read client data until disconnected
 func (c *Client) listen() {
 	c.Lock()
 	c.authorized = true
-	r := c.r
 	c.Unlock()
 	for {
-		message, err := r.ReadString('\n')
+		message, err := c.readln()
 		if err != nil {
-			c.close()
 			return
 		}
-		c.server.onNewMessage(c, strings.Trim(message, "\r\n"))
+		c.server.onNewMessage(c, message)
 	}
 }
 
