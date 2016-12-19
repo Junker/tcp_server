@@ -2,10 +2,8 @@ package tcp_server
 
 import (
 	"bufio"
-	. "github.com/smartystreets/goconvey/convey"
 	"net"
 	"testing"
-	//"time"
 )
 
 func buildTestServer() *Server {
@@ -18,7 +16,7 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	var messageReceived bool
 	var messageText string
 	var messageTextReceived string
-	messageTest := "testing"
+	messageTest := "This is going to be a test of the receiving and sending of messages in both directions."
 
 	var newClient bool
 	var connectionClosed bool
@@ -43,10 +41,8 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to start server.\r\n" + err.Error())
 	}
-	go func() {
-		// Wait for server to accept connections.
-		//time.Sleep(10 * time.Millisecond)
 
+	go func() {
 		conn, err := net.Dial("tcp", "localhost:9999")
 		if err != nil {
 			t.Fatal("Failed to connect to test server.")
@@ -61,17 +57,23 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	// Wait for server
 	server.Process()
 
-	Convey("Messages should be equal", t, func() {
-		So(messageText, ShouldEqual, messageTest)
-		So(messageTextReceived, ShouldEqual, messageTest+"\r\n")
-	})
-	Convey("It should receive new client callback", t, func() {
-		So(newClient, ShouldEqual, true)
-	})
-	Convey("It should receive message callback", t, func() {
-		So(messageReceived, ShouldEqual, true)
-	})
-	Convey("It should receive connection closed callback", t, func() {
-		So(connectionClosed, ShouldEqual, true)
-	})
+	// Server is now shut down.
+	if messageText != messageTest {
+		t.Fatal("Message received from callback function and test message aren't equal. Neither should have newline characters.\r\nReceived \"" + messageText + "\"\r\nTest message: \"" + messageTest + "\"\r\n")
+	}
+
+	if messageTextReceived != messageTest+"\r\n" {
+		t.Fatal("Message received from client bufio reader and test message aren't equal. The message received from the reader should have newline characters.\r\nReceived from bufio reader \"" + messageTextReceived + "\"\r\nTest message: \"" + messageTest + "\"\r\n")
+	}
+
+	if !newClient {
+		t.Fatal("onNewClientCallback function wasn't called, and should have been.")
+	}
+	if !messageReceived {
+		t.Fatal("onNewMessageCallback function wasn't called, and should have been.")
+	}
+	if !connectionClosed {
+		t.Fatal("onClientConnectionClosedCallback function wasn't called, and should have been.")
+	}
+
 }
