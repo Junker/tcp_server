@@ -46,7 +46,7 @@ func main() {
 
 # Contributing
 
-To hack on this project:
+To contribute:
 
 1. Install as usual (`go get -u github.com/tech10/tcp_server`)
 2. Create your feature branch (`git checkout -b my-new-feature`)
@@ -56,7 +56,7 @@ To hack on this project:
 Contribute upstream:
 
 1. Fork it on GitHub
-2. Add your remote (`git remote add fork git@github.com:firstrow/tcp_server.git`)
+2. Add your remote (`git remote add fork git@github.com:tech10/tcp_server.git`)
 3. Push to the branch (`git push fork my-new-feature`)
 4. Create a new Pull Request on GitHub
 
