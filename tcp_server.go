@@ -13,13 +13,14 @@ import (
 // It should never be necessary to interact with any variables within this type directly.
 type Client struct {
 	sync.Mutex
-	conn      net.Conn
-	connected bool
-	ip        string
-	r         *bufio.Reader
-	w         *bufio.Writer
-	id        float64
-	server    *Server
+	conn       net.Conn
+	connected  bool
+	authorized bool
+	ip         string
+	r          *bufio.Reader
+	w          *bufio.Writer
+	id         float64
+	server     *Server
 }
 
 // TCP server instance.
@@ -40,7 +41,7 @@ type Server struct {
 // Read client data
 func (c *Client) listen() {
 	c.Lock()
-	c.connected = true
+	c.authorized = true
 	r := c.r
 	c.Unlock()
 	for {
@@ -116,8 +117,12 @@ func (c *Client) close() error {
 	if c.connected {
 		err = c.conn.Close()
 		c.connected = false
-		c.Unlock()
-		c.server.onClientConnectionClosed(c, err)
+		if c.authorized {
+			c.Unlock()
+			c.server.onClientConnectionClosed(c, err)
+		} else {
+			c.Unlock()
+		}
 		c.server.remove(c.id)
 		c.server.wg.Done()
 	} else {
@@ -231,16 +236,16 @@ func (s *Server) Clients() []*Client {
 
 func (s *Server) add(c *Client) {
 	s.wg.Add(1)
-	if !s.onNewClientCallback(c) {
-		c.conn.Close()
-		s.wg.Done()
-		return
-	}
 	s.Lock()
 	s.clients[s.maxid] = c
 	c.id = s.maxid
 	s.maxid++
+	c.connected = true
 	s.Unlock()
+	if !s.onNewClientCallback(c) {
+		c.close()
+		return
+	}
 	go c.listen()
 }
 
