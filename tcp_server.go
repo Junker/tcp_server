@@ -33,7 +33,7 @@ type Server struct {
 	listener                 *net.Listener
 	started                  bool
 	maxid                    float64
-	onNewClientCallback      func(c *Client) bool
+	onNewClient              func(c *Client) bool
 	onClientConnectionClosed func(c *Client, err error)
 	onNewMessage             func(c *Client, message string)
 }
@@ -133,17 +133,17 @@ func (c *Client) ID() int64 {
 func (c *Client) close() error {
 	var err error
 	c.Lock()
+	s := c.server
 	if c.connected {
 		err = c.conn.Close()
 		c.connected = false
 		if c.authorized {
 			c.Unlock()
-			c.server.onClientConnectionClosed(c, err)
+			s.onClientConnectionClosed(c, err)
 		} else {
 			c.Unlock()
 		}
-		c.server.remove(c.id)
-		c.server.wg.Done()
+		s.remove(c.id)
 	} else {
 		err = errors.New("already disconnected")
 		c.Unlock()
@@ -159,17 +159,23 @@ func (c *Client) Close() error {
 // Called when a client connection is received, and before data is received by the client.
 // To accept a connection, this function must return true.
 func (s *Server) OnNewClient(callback func(c *Client) bool) {
-	s.onNewClientCallback = callback
+	s.Lock()
+	s.onNewClient = callback
+	s.Unlock()
 }
 
 // Called after Client is disconnected.
 func (s *Server) OnClientConnectionClosed(callback func(c *Client, err error)) {
+	s.Lock()
 	s.onClientConnectionClosed = callback
+	s.Unlock()
 }
 
 // Called when Client receives new message
 func (s *Server) OnNewMessage(callback func(c *Client, message string)) {
+	s.Lock()
 	s.onNewMessage = callback
+	s.Unlock()
 }
 
 // Start server
@@ -185,30 +191,38 @@ func (s *Server) Start() error {
 	}
 	s.started = true
 	s.listener = &listener
-	return nil
+	s.wg.Add(1)
+	go s.process()
+	return err
 }
 
 // Shut down the server and disconnect all connected clients.
 func (s *Server) Stop() {
 	s.Lock()
-	clients := s.clients
+	defer s.Unlock()
 	(*s.listener).Close()
-	s.Unlock()
-	for _, c := range clients {
-		c.close()
+	for _, c := range s.clients {
+		if c != nil {
+			s.Unlock()
+			c.close()
+			s.Lock()
+		}
 	}
 }
 
 // Process accepting clients until the server is shut down.
-func (s *Server) Process() {
-	s.wg.Add(1)
-	go s.accept()
+func (s *Server) process() {
+	defer s.wg.Done()
+	s.accept()
+}
+
+// Wait for server processing to complete. This will happen when all clients are disconnected and the server is shut down.
+func (s *Server) Wait() {
 	s.wg.Wait()
 }
 
 // Accept client connections.
 func (s *Server) accept() {
-	defer s.wg.Done()
 	s.Lock()
 	listener := s.listener
 	s.Unlock()
@@ -225,6 +239,7 @@ func (s *Server) accept() {
 			w:      bufio.NewWriter(conn),
 			server: s,
 		}
+		s.wg.Add(1)
 		go s.add(client)
 	}
 }
@@ -238,8 +253,10 @@ func (s *Server) clients_sorted() []*Client {
 	if len(s.clients) == 0 {
 		return clients
 	}
-	for id := range s.clients {
-		ids = append(ids, id)
+	for id, c := range s.clients {
+		if c != nil {
+			ids = append(ids, id)
+		}
 	}
 	sort.Float64s(ids)
 	for _, id := range ids {
@@ -254,14 +271,13 @@ func (s *Server) Clients() []*Client {
 }
 
 func (s *Server) add(c *Client) {
-	s.wg.Add(1)
 	s.Lock()
 	s.clients[s.maxid] = c
 	c.id = s.maxid
 	s.maxid++
 	c.connected = true
 	s.Unlock()
-	if !s.onNewClientCallback(c) {
+	if !s.onNewClient(c) {
 		c.close()
 		return
 	}
@@ -270,11 +286,12 @@ func (s *Server) add(c *Client) {
 
 func (s *Server) remove(cid float64) {
 	s.Lock()
-	defer s.Unlock()
 	_, exists := s.clients[cid]
 	if exists {
 		delete(s.clients, cid)
 	}
+	s.Unlock()
+	s.wg.Done()
 }
 
 // Creates new tcp server instance

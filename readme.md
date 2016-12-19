@@ -22,8 +22,8 @@ func main() {
 
 	server.OnNewClient(func(c *tcp_server.Client) bool {
 		// new client connected
-		// lets send some message
-		c.Send("Hello")
+		// lets send a message
+		c.Send("Hello\n")
 		//Now let's accept the connection.
 		return true
 	})
@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		return
 		}
-	server.Process()
+	server.Wait()
 }
 ```
 
@@ -51,13 +51,16 @@ To contribute:
 1. Install as usual (`go get -u github.com/tech10/tcp_server`)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Ensure everything works and the tests pass (`go test`)
-4. Commit your changes (`git commit -am 'Add some feature'`)
+4. Make sure the benchmarks run successfully as well (`go test -bench .`)
+5. Make sure there aren't any data races in anything (`go test -race; go test -race -bench .`)
+6. Commit your changes (`git commit -am 'Add some feature'`)
 
 Contribute upstream:
 
 1. Fork it on GitHub
 2. Add your remote (`git remote add fork git@github.com:tech10/tcp_server.git`)
-3. Push to the branch (`git push fork my-new-feature`)
-4. Create a new Pull Request on GitHub
+3. Complete all the tests stated above.
+4. Push to the branch (`git push fork my-new-feature`)
+5. Create a new Pull Request on GitHub
 
 Notice: Always use the original import path by installing with `go get`.
