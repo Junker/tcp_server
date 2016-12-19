@@ -36,7 +36,11 @@ func main() {
 		// connection with client lost
 	})
 
-	server.Listen()
+	err := server.Start()
+	if err != nil {
+		return
+		}
+	server.Process()
 }
 ```
 

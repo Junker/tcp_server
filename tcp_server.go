@@ -9,9 +9,9 @@ import (
 	"sync"
 )
 
-// Client holds info about connection
+// Client holds info about a connection to the server.
+// It should never be necessary to interact with any variables within this type directly.
 type Client struct {
-	//Make thread safe from data races.
 	sync.Mutex
 	conn      net.Conn
 	connected bool
@@ -19,16 +19,19 @@ type Client struct {
 	r         *bufio.Reader
 	w         *bufio.Writer
 	id        float64
-	server    *server
+	server    *Server
 }
 
-// TCP server
-type server struct {
-	//Make thread safe from data races.
+// TCP server instance.
+//It should not be necessary to interact with any of these variables directly.
+type Server struct {
 	sync.Mutex
+	wg                       sync.WaitGroup
 	clients                  map[float64]*Client
-	address                  string  // Address to open
-	maxid                    float64 // Maximum available client ID
+	address                  string
+	listener                 *net.Listener
+	started                  bool
+	maxid                    float64
 	onNewClientCallback      func(c *Client) bool
 	onClientConnectionClosed func(c *Client, err error)
 	onNewMessage             func(c *Client, message string)
@@ -37,6 +40,7 @@ type server struct {
 // Read client data
 func (c *Client) listen() {
 	c.Lock()
+	c.connected = true
 	r := c.r
 	c.Unlock()
 	for {
@@ -72,7 +76,9 @@ func (c *Client) Send(message string) error {
 	return err
 }
 
-// Send text message to all clients accept the client excluded. Set to nill to send to all clients.
+// Send text message to all clients accept the client excluded.
+// Set excluded to nill to send to all clients.
+// Returns the number of clients data was sent to, and an error if the number is 0.
 func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	count := 0
 	if message == "" {
@@ -97,7 +103,7 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	return count, nil
 }
 
-// Returns the client ID
+// Gets the client ID.
 func (c *Client) ID() int64 {
 	c.Lock()
 	defer c.Unlock()
@@ -110,44 +116,83 @@ func (c *Client) close() error {
 	if c.connected {
 		err = c.conn.Close()
 		c.connected = false
-		c.server.remove(c.id)
+		c.Unlock()
 		c.server.onClientConnectionClosed(c, err)
+		c.server.remove(c.id)
+		c.server.wg.Done()
 	} else {
 		err = errors.New("already disconnected")
+		c.Unlock()
 	}
-	c.Unlock()
 	return err
 }
 
-// Closes an open client connection.
+// Closes an open client connection, and calls the OnConnectionClose() callback function.
 func (c *Client) Close() error {
 	return c.close()
 }
 
-// Called right before server starts listening to a new client instance
-func (s *server) OnNewClient(callback func(c *Client) bool) {
+// Called when a client connection is received, and before data is received by the client.
+// To accept a connection, this function must return true.
+func (s *Server) OnNewClient(callback func(c *Client) bool) {
 	s.onNewClientCallback = callback
 }
 
-// Called right after connection closed
-func (s *server) OnClientConnectionClosed(callback func(c *Client, err error)) {
+// Called after Client is disconnected.
+func (s *Server) OnClientConnectionClosed(callback func(c *Client, err error)) {
 	s.onClientConnectionClosed = callback
 }
 
 // Called when Client receives new message
-func (s *server) OnNewMessage(callback func(c *Client, message string)) {
+func (s *Server) OnNewMessage(callback func(c *Client, message string)) {
 	s.onNewMessage = callback
 }
 
-// Start network server
-func (s *server) Listen() error {
+// Start server
+func (s *Server) Start() error {
+	s.Lock()
+	defer s.Unlock()
+	if s.started {
+		return errors.New("already started")
+	}
 	listener, err := net.Listen("tcp", s.address)
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	s.started = true
+	s.listener = &listener
+	return nil
+}
+
+// Shut down the server and disconnect all connected clients.
+func (s *Server) Stop() {
+	s.Lock()
+	clients := s.clients
+	(*s.listener).Close()
+	s.Unlock()
+	for _, c := range clients {
+		c.close()
+	}
+}
+
+// Process accepting clients until the server is shut down.
+func (s *Server) Process() {
+	s.wg.Add(1)
+	go s.accept()
+	s.wg.Wait()
+}
+
+// Accept client connections.
+func (s *Server) accept() {
+	defer s.wg.Done()
+	s.Lock()
+	listener := s.listener
+	s.Unlock()
 	for {
-		conn, _ := listener.Accept()
+		conn, err := (*listener).Accept()
+		if err != nil {
+			return
+		}
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 		client := &Client{
 			conn:   conn,
@@ -156,15 +201,12 @@ func (s *server) Listen() error {
 			w:      bufio.NewWriter(conn),
 			server: s,
 		}
-		s.add(client)
-		go client.listen()
+		go s.add(client)
 	}
-	return nil
 }
 
 // Sorts client connections by increasing ID.
-
-func (s *server) clients_sorted() []*Client {
+func (s *Server) clients_sorted() []*Client {
 	clients := []*Client{}
 	ids := []float64{}
 	s.Lock()
@@ -183,24 +225,26 @@ func (s *server) clients_sorted() []*Client {
 }
 
 // Returns the clients in there connection order.
-func (s *server) Clients() []*Client {
+func (s *Server) Clients() []*Client {
 	return s.clients_sorted()
 }
 
-func (s *server) add(c *Client) {
+func (s *Server) add(c *Client) {
+	s.wg.Add(1)
 	if !s.onNewClientCallback(c) {
 		c.conn.Close()
+		s.wg.Done()
 		return
 	}
 	s.Lock()
 	s.clients[s.maxid] = c
 	c.id = s.maxid
-	c.connected = true
 	s.maxid++
 	s.Unlock()
+	go c.listen()
 }
 
-func (s *server) remove(cid float64) {
+func (s *Server) remove(cid float64) {
 	s.Lock()
 	defer s.Unlock()
 	_, exists := s.clients[cid]
@@ -210,8 +254,8 @@ func (s *server) remove(cid float64) {
 }
 
 // Creates new tcp server instance
-func New(address string) *server {
-	server := &server{
+func New(address string) *Server {
+	server := &Server{
 		address: address,
 		clients: make(map[float64]*Client, 0),
 		maxid:   1,
