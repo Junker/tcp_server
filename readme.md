@@ -51,9 +51,8 @@ To contribute:
 1. Install as usual (`go get -u github.com/tech10/tcp_server`)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Ensure everything works and the tests pass (`go test`)
-4. Make sure the benchmarks run successfully as well (`go test -bench .`)
-5. Make sure there aren't any data races in anything (`go test -race; go test -race -bench .`)
-6. Commit your changes (`git commit -am 'Add some feature'`)
+4. Make sure there aren't any data races (`go test -race`)
+5. Commit your changes (`git commit -am 'Add some feature'`)
 
 Contribute upstream:
 

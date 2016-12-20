@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -155,34 +156,53 @@ func Test_rejecting_new_client_callback(t *testing.T) {
 	serverFuncsSet()
 }
 
-func Benchmark_client_connections_disconnections_messages(b *testing.B) {
+func Test_multiple_clients(t *testing.T) {
 
-	msg := []byte("test\n")
+	l.Lock()
+	newClient = false
+	messageReceived = false
+	messageText = ""
+	connectionClosed = false
+	server.OnNewMessage(func(c *Client, message string) {})
+	l.Unlock()
 
-	for i := 0; i < b.N; i++ {
+	messageTest := "This is going to be a test of sending a message to multiple clients."
+
+	clients := []*net.Conn{}
+	number := 100
+
+	for i := 1; i <= number; i++ {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
-			b.Fatal("Failed to connect to test server. Unable to run benchmark.", err)
+			t.Fatal("Failed to connect to test server with client "+strconv.Itoa(i)+". Couldn't test multiple clients.", err)
 		}
-		conn.Write(msg)
-		conn.Close()
+		clients = append(clients, &conn)
+	}
+
+	//Wait for the server to finish calling our functions.
+	time.Sleep(time.Millisecond * 10)
+
+	count, err := server.SendAll(messageTest)
+	if err != nil {
+		t.Error("Failed to send message to all connected clients.\r\n" + err.Error())
+	}
+	if count != number {
+		t.Error("Failed to send message to the number of clients connected.\r\nSent to " + strconv.Itoa(count) + " clients, and expected to send to " + strconv.Itoa(number) + " clients.")
+	}
+	for _, conn := range clients {
+		(*conn).Close()
+	}
+	//Wait for the server to finish calling our functions.
+	time.Sleep(time.Millisecond * 10)
+
+	count, err = server.SendAll(messageTest)
+
+	if err == nil {
+		t.Error("Error not registered. Sending to closed connections should fail.")
+	}
+	if count != 0 {
+		t.Error("The server thought " + strconv.Itoa(count) + " clients were available to send data to. No clients should receive messages after all connections are closed.")
 	}
 
 }
 
-func Benchmark_parallel_client_connections_disconnections_messages(b *testing.B) {
-
-	msg := []byte("test\n")
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			conn, err := net.Dial("tcp", addr)
-			if err != nil {
-				b.Fatal("Couldn't connect to test server. Unable to complete parallel execution test.", err)
-			}
-			conn.Write(msg)
-			conn.Close()
-		}
-	})
-
-}

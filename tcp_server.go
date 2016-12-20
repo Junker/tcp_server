@@ -270,6 +270,27 @@ func (s *Server) Clients() []*Client {
 	return s.clients_sorted()
 }
 
+// Sends a message to all connected clients.
+func (s *Server) SendAll(message string) (int, error) {
+	clients := server.clients_sorted()
+	count := 0
+	if message == "" {
+		return count, errors.New("empty message not allowed")
+	}
+	if len(clients) == 0 {
+		return count, errors.New("no clients connected")
+	}
+	for _, c := range clients {
+		if c.Send(message) == nil {
+			count++
+		}
+	}
+	if count == 0 {
+		return count, errors.New("message failed to send to connected clients")
+	}
+	return count, nil
+}
+
 func (s *Server) add(c *Client) {
 	s.Lock()
 	s.clients[s.maxid] = c
