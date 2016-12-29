@@ -57,7 +57,7 @@ func (c *Client) readln() (string, error) {
 		c.close()
 		return "", err
 	}
-	return strings.Trim(message, "\r\n"), err
+	return stringFormatWithBS(message), err
 }
 
 // Read client data until disconnected
