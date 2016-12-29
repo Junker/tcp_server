@@ -90,7 +90,11 @@ func (c *Client) readprompt(prompt string) (string, bool) {
 
 // Read a line of data from a client, and prompt them what to enter.
 func (c *Client) Read_prompt(prompt string) (string, bool) {
-	str, aborted := c.readprompt(strings.Trim(prompt, "\r\n") + "\r\nEnter abort to cancel.")
+	prompt = strings.Trim(prompt, "\r\n")
+	if prompt != "" {
+		prompt += "\r\n"
+	}
+	str, aborted := c.readprompt(prompt + "Enter abort to cancel.")
 	if aborted {
 		return str, aborted
 	}
@@ -105,12 +109,15 @@ func (c *Client) Read_prompt(prompt string) (string, bool) {
 func (c *Client) Read_confirm(prompt string) (bool, bool) {
 	prompthead := ""
 	prompt = strings.Trim(prompt, "\r\n")
+	if prompt != "" {
+		prompt += "\r\n"
+	}
 	var res bool
 	var aborted bool
 	var answer string
 loop:
 	for {
-		answer, aborted = c.readprompt(prompthead + prompt + "\r\nEnter yes, no, or abort to cancel.")
+		answer, aborted = c.readprompt(prompthead + prompt + "Enter yes, no, or abort to cancel.")
 		if aborted {
 			return res, aborted
 		}
@@ -140,7 +147,10 @@ loop:
 
 // Give a client an option to select from a menu.
 func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
-	prompt = strings.Trim(prompt, "\r\n") + "\r\n"
+	prompt = strings.Trim(prompt, "\r\n")
+	if prompt != "" {
+		prompt += "\r\n"
+	}
 	if len(menu) == 0 {
 		return -1, true
 	}
