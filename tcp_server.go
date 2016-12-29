@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -73,6 +74,117 @@ func (c *Client) listen() {
 	}
 }
 
+func (c *Client) readprompt(prompt string) (string, bool) {
+	if prompt != "" {
+		err := c.Send(prompt)
+		if err != nil {
+			return "", true
+		}
+	}
+	str, err := c.readln()
+	if err != nil {
+		return str, true
+	}
+	return str, false
+}
+
+// Read a line of data from a client, and prompt them what to enter.
+func (c *Client) Read_prompt(prompt string) (string, bool) {
+	str, aborted := c.readprompt(strings.Trim(prompt, "\r\n") + "\r\nEnter abort to cancel.")
+	if aborted {
+		return str, aborted
+	}
+	if strings.ToLower(str) == "abort" {
+		aborted = true
+		c.Send("Aborted.")
+	}
+	return str, aborted
+}
+
+// Get a yes or no prompt from the client.
+func (c *Client) Read_confirm(prompt string) (bool, bool) {
+	prompthead := ""
+	prompt = strings.Trim(prompt, "\r\n")
+	var res bool
+	var aborted bool
+	var answer string
+loop:
+	for {
+		answer, aborted = c.readprompt(prompthead + prompt + "\r\nEnter yes, no, or abort to cancel.")
+		if aborted {
+			return res, aborted
+		}
+		switch strings.ToLower(answer) {
+		case "":
+			prompthead = "An empty value isn't supported.\r\n"
+			continue loop
+		case "abort":
+			c.Send("Aborted.")
+			aborted = true
+			break loop
+		case "y", "yes":
+			res = true
+			aborted = false
+			break loop
+		case "n", "no":
+			res = false
+			aborted = false
+			break loop
+		default:
+			prompthead = "The entry " + answer + " is unsupported.\r\n"
+			continue loop
+		}
+	}
+	return res, aborted
+}
+
+// Give a client an option to select from a menu.
+func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
+	prompt = strings.Trim(prompt, "\r\n") + "\r\n"
+	if len(menu) == 0 {
+		return -1, true
+	}
+	menuselect := []string{}
+	for i, string := range menu {
+		if string == "" {
+			continue
+		}
+		index := strconv.Itoa(i + 1)
+		menuselect = append(menuselect, "["+index+"]: "+string)
+	}
+	menumsg := strings.Join(menuselect, "\r\n") + "\r\n"
+	rangemin := 1
+	rangemax := len(menu)
+	abortmsg := "Enter abort to cancel."
+	prompthead := ""
+	var res int
+	var aborted bool
+	var answer string
+	for {
+		answer, aborted = c.readprompt(prompthead + prompt + menumsg + abortmsg)
+		if !aborted {
+			return -1, aborted
+		}
+		if strings.ToLower(answer) == "abort" {
+			c.Send("Aborted.")
+			return -1, true
+		}
+		if answer == "" {
+			prompthead = "An empty value isn't accepted.\r\n"
+			continue
+		}
+		int, err := strconv.Atoi(answer)
+		if err != nil || int < rangemin || int > rangemax {
+			prompthead = "Invalid selection.\r\n"
+			continue
+		}
+		aborted = false
+		res = int - 1
+		break
+	}
+	return res, aborted
+}
+
 // Get clients IP address
 func (c *Client) IP() string {
 	c.Lock()
@@ -83,7 +195,7 @@ func (c *Client) IP() string {
 // Send text message to client
 func (c *Client) Send(message string) error {
 	message = strings.Trim(message, "\r\n") + "\r\n"
-	if message == "" {
+	if message == "\r\n" {
 		return errors.New("empty string invalid")
 	}
 	c.Lock()
