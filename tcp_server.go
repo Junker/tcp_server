@@ -308,6 +308,13 @@ func (c *Client) Close() error {
 	return c.close()
 }
 
+// Returns the clients server instance.
+func (c *Client) Server() *Server {
+	c.Lock()
+	defer c.Unlock()
+	return c.server
+}
+
 // Called when a client connection is received, and before data is received by the client in the background.
 // To accept a connection, this function must return true.
 func (s *Server) OnNewClient(callback func(c *Client) bool) {
