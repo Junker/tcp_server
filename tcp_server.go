@@ -22,6 +22,8 @@ type Client struct {
 	w          *bufio.Writer
 	id         float64
 	server     *Server
+	db         map[string]interface{}
+	dbl        sync.Mutex
 }
 
 // TCP server instance.
@@ -296,6 +298,7 @@ func (c *Client) close() error {
 			c.Unlock()
 		}
 		s.remove(c.id)
+		c.Data_clear()
 	} else {
 		err = errors.New("already disconnected")
 		c.Unlock()
@@ -313,6 +316,43 @@ func (c *Client) Server() *Server {
 	c.Lock()
 	defer c.Unlock()
 	return c.server
+}
+
+// Set a data value.
+func (c *Client) Data_set(key string, value interface{}) {
+	c.dbl.Lock()
+	defer c.dbl.Unlock()
+	if c.db == nil {
+		c.db = make(map[string]interface{})
+	}
+	c.db[key] = value
+}
+
+// Reads data from the database.
+// To correctly use this in your programs,
+// you will need to call it with a type assertion.
+// For example,
+// time, found := c.Data_get("time").(time.Time)
+// if !found {
+// do something here.
+// } else {
+// return time
+// }
+
+func (c *Client) Data_get(key string) interface{} {
+	c.dbl.Lock()
+	defer c.dbl.Unlock()
+	if _, exists := c.db[key]; !exists {
+		return nil
+	}
+	return c.db[key]
+}
+
+// Clears the client database.
+func (c *Client) Data_clear() {
+	c.dbl.Lock()
+	defer c.dbl.Unlock()
+	c.db = nil
 }
 
 // Called when a client connection is received, and before data is received by the client in the background.
