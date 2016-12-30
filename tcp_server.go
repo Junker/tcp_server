@@ -245,6 +245,35 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	return count, nil
 }
 
+// Send text message to all authorized clients.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (c *Client) SendAllAuthorized(message string) (int, error) {
+	count := 0
+	if message == "" {
+		return count, errors.New("empty string invalid")
+	}
+	clients := c.server.clients_sorted()
+	if len(clients) == 0 {
+		return count, errors.New("no clients available")
+	}
+	for _, sc := range clients {
+		sc.Lock()
+		if !sc.authorized {
+			sc.Unlock()
+			continue
+		}
+		sc.Unlock()
+		err := sc.Send(message)
+		if err == nil {
+			count++
+		}
+	}
+	if count == 0 {
+		return count, errors.New("sent to no clients")
+	}
+	return count, nil
+}
+
 // Gets the client ID.
 func (c *Client) ID() int64 {
 	c.Lock()
@@ -260,6 +289,7 @@ func (c *Client) close() error {
 		err = c.conn.Close()
 		c.connected = false
 		if c.authorized {
+			c.authorized = false
 			c.Unlock()
 			s.onClientConnectionClosed(c, err)
 		} else {
@@ -278,7 +308,7 @@ func (c *Client) Close() error {
 	return c.close()
 }
 
-// Called when a client connection is received, and before data is received by the client.
+// Called when a client connection is received, and before data is received by the client in the background.
 // To accept a connection, this function must return true.
 func (s *Server) OnNewClient(callback func(c *Client) bool) {
 	s.Lock()
