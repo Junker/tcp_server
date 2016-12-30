@@ -431,7 +431,7 @@ func (s *Server) Clients() []*Client {
 
 // Sends a message to all connected clients.
 func (s *Server) SendAll(message string) (int, error) {
-	clients := server.clients_sorted()
+	clients := s.clients_sorted()
 	count := 0
 	if message == "" {
 		return count, errors.New("empty message not allowed")
