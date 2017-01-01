@@ -14,16 +14,18 @@ import (
 // It should never be necessary to interact with any variables within this type directly.
 type Client struct {
 	sync.Mutex
-	conn       net.Conn
-	connected  bool
-	authorized bool
-	ip         string
-	r          *bufio.Reader
-	w          *bufio.Writer
-	id         float64
-	server     *Server
-	db         map[string]interface{}
-	dbl        sync.Mutex
+	conn        net.Conn
+	connected   bool
+	authorized  bool
+	ip          string
+	host        string
+	host_cached bool
+	r           *bufio.Reader
+	w           *bufio.Writer
+	id          float64
+	server      *Server
+	db          map[string]interface{}
+	dbl         sync.Mutex
 }
 
 // TCP server instance.
@@ -202,6 +204,39 @@ func (c *Client) IP() string {
 	c.Lock()
 	defer c.Unlock()
 	return c.ip
+}
+
+// Get clients hostname by doing an RDNS lookup on the IP address.
+func (c *Client) Host() string {
+	c.Lock()
+	defer c.Unlock()
+	if c.host_cached {
+		return c.host
+	}
+	ip := c.ip
+	c.Unlock()
+	hosts, err := net.LookupAddr(ip)
+	if err != nil {
+		c.Lock()
+		return ""
+	}
+	if len(hosts) == 1 {
+		c.Lock()
+		c.host = host_check(hosts[0])
+		c.host_cached = true
+		return c.host
+	} else {
+		c.Lock()
+		for i, host := range hosts {
+			if i+1 != len(hosts) {
+				c.host += host_check(host) + ", "
+			} else {
+				c.host += host_check(host)
+			}
+		}
+		c.host_cached = true
+	}
+	return c.host
 }
 
 // Send text message to client
