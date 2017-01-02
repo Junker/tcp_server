@@ -93,7 +93,13 @@ func (c *Client) listen() {
 			c.pmsg <- message
 			continue
 		}
+		c.Lock()
+		c.listening = false
+		c.Unlock()
 		c.server.onNewMessage(c, message)
+		c.Lock()
+		c.listening = true
+		c.Unlock()
 	}
 }
 
@@ -146,11 +152,6 @@ func (c *Client) Read_prompt(prompt string) (string, bool) {
 		aborted = true
 		c.Send("Aborted.")
 	}
-	c.Lock()
-	if !c.listening && c.authorized {
-		go c.listen()
-	}
-	c.Unlock()
 	return str, aborted
 }
 
@@ -191,11 +192,6 @@ loop:
 			continue loop
 		}
 	}
-	c.Lock()
-	if !c.listening && c.authorized {
-		go c.listen()
-	}
-	c.Unlock()
 	return res, aborted
 }
 
@@ -247,11 +243,6 @@ func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
 		res = int - 1
 		break
 	}
-	c.Lock()
-	if !c.listening && c.authorized {
-		go c.listen()
-	}
-	c.Unlock()
 	return res, aborted
 }
 
