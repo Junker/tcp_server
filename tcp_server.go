@@ -17,10 +17,14 @@ type Client struct {
 	conn        net.Conn
 	connected   bool
 	authorized  bool
+	listening   bool
 	ip          string
 	host        string
 	host_cached bool
 	r           *bufio.Reader
+	p           sync.Mutex
+	pmsg        chan string
+	prompt      bool
 	w           *bufio.Writer
 	id          float64
 	server      *Server
@@ -54,9 +58,10 @@ func (c *Client) readln() (string, error) {
 		c.Unlock()
 		return "", errors.New("client not connected")
 	}
-	r := c.r
 	c.Unlock()
-	message, err := r.ReadString('\n')
+	var message string
+	var err error
+	message, err = c.r.ReadString('\n')
 	if err != nil {
 		c.close()
 		return "", err
@@ -68,24 +73,59 @@ func (c *Client) readln() (string, error) {
 func (c *Client) listen() {
 	c.Lock()
 	c.authorized = true
+	c.listening = true
 	c.Unlock()
+	defer func() {
+		recover()
+		c.Lock()
+		c.listening = false
+		c.Unlock()
+	}()
 	for {
 		message, err := c.readln()
 		if err != nil {
 			return
+		}
+		c.Lock()
+		prompt := c.prompt
+		c.Unlock()
+		if prompt {
+			c.pmsg <- message
+			continue
 		}
 		c.server.onNewMessage(c, message)
 	}
 }
 
 func (c *Client) readprompt(prompt string) (string, bool) {
+	c.p.Lock()
+	defer c.p.Unlock()
+	c.Lock()
+	c.prompt = true
+	listening := c.listening
+	c.Unlock()
+	defer func() {
+		c.Lock()
+		c.prompt = false
+		c.Unlock()
+	}()
 	if prompt != "" {
 		err := c.Send(prompt)
 		if err != nil {
 			return "", true
 		}
 	}
-	str, err := c.readln()
+	var str string
+	var err error
+	var ok bool
+	if !listening {
+		str, err = c.readln()
+	} else {
+		str, ok = <-c.pmsg
+		if !ok {
+			err = errors.New("prompt channel closed")
+		}
+	}
 	if err != nil {
 		return str, true
 	}
@@ -106,6 +146,11 @@ func (c *Client) Read_prompt(prompt string) (string, bool) {
 		aborted = true
 		c.Send("Aborted.")
 	}
+	c.Lock()
+	if !c.listening && c.authorized {
+		go c.listen()
+	}
+	c.Unlock()
 	return str, aborted
 }
 
@@ -146,6 +191,11 @@ loop:
 			continue loop
 		}
 	}
+	c.Lock()
+	if !c.listening && c.authorized {
+		go c.listen()
+	}
+	c.Unlock()
 	return res, aborted
 }
 
@@ -171,17 +221,18 @@ func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
 	rangemax := len(menu)
 	abortmsg := "Enter abort to cancel."
 	prompthead := ""
-	var res int
+	res := -1
 	var aborted bool
 	var answer string
 	for {
+		res = -1
 		answer, aborted = c.readprompt(prompthead + prompt + menumsg + abortmsg)
 		if !aborted {
-			return -1, aborted
+			return res, aborted
 		}
 		if strings.ToLower(answer) == "abort" {
 			c.Send("Aborted.")
-			return -1, true
+			break
 		}
 		if answer == "" {
 			prompthead = "An empty value isn't accepted.\r\n"
@@ -196,6 +247,11 @@ func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
 		res = int - 1
 		break
 	}
+	c.Lock()
+	if !c.listening && c.authorized {
+		go c.listen()
+	}
+	c.Unlock()
 	return res, aborted
 }
 
@@ -325,6 +381,7 @@ func (c *Client) close() error {
 	if c.connected {
 		err = c.conn.Close()
 		c.connected = false
+		close(c.pmsg)
 		if c.authorized {
 			c.authorized = false
 			c.Unlock()
@@ -470,6 +527,7 @@ func (s *Server) accept() {
 			conn:   conn,
 			ip:     ip,
 			r:      bufio.NewReader(conn),
+			pmsg:   make(chan string),
 			w:      bufio.NewWriter(conn),
 			server: s,
 		}
