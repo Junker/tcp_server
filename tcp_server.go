@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"net"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,22 +15,23 @@ import (
 // It should never be necessary to interact with any variables within this type directly.
 type Client struct {
 	sync.Mutex
-	conn        net.Conn
-	connected   bool
-	authorized  bool
-	listening   bool
-	ip          string
-	host        string
-	host_cached bool
-	r           *bufio.Reader
-	p           sync.Mutex
-	pmsg        chan string
-	prompt      bool
-	w           *bufio.Writer
-	id          float64
-	server      *Server
-	db          map[string]interface{}
-	dbl         sync.Mutex
+	conn             net.Conn
+	connected        bool
+	authorized       bool
+	listening        bool
+	callback_running bool
+	ip               string
+	host             string
+	host_cached      bool
+	r                *bufio.Reader
+	p                sync.Mutex
+	pmsg             chan string
+	prompt           bool
+	w                *bufio.Writer
+	id               float64
+	server           *Server
+	db               map[string]interface{}
+	dbl              sync.Mutex
 }
 
 // TCP server instance.
@@ -79,6 +81,7 @@ func (c *Client) listen() {
 		recover()
 		c.Lock()
 		c.listening = false
+		c.callback_running = false
 		c.Unlock()
 	}()
 	for {
@@ -95,12 +98,29 @@ func (c *Client) listen() {
 		}
 		c.Lock()
 		c.listening = false
+		c.callback_running = true
 		c.Unlock()
 		c.server.onNewMessage(c, message)
 		c.Lock()
 		c.listening = true
+		c.callback_running = false
 		c.Unlock()
 	}
+}
+
+// You can call this method to stop the function executed when messages are received.
+// Exiting the goroutine yourself will cause the program to stop sending messages to your function for receiving client messages, but exiting this function will ensure messages are still received, while at the same time, exiting the goroutine.
+func (c *Client) Stop() {
+	c.Lock()
+	listener := c.callback_running
+	c.Unlock()
+	if !listener {
+		return
+	}
+	defer func() {
+		go c.listen()
+	}()
+	runtime.Goexit()
 }
 
 func (c *Client) readprompt(prompt string) (string, bool) {
