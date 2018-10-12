@@ -349,9 +349,7 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	return count, nil
 }
 
-// Send text message to all authorized clients.
-// Returns the number of clients data was sent to, and an error if the number is 0.
-func (c *Client) SendAllAuthorized(message string) (int, error) {
+func (c *Client) send_authorized(message string, authorized bool) (int, error) {
 	count := 0
 	if message == "" {
 		return count, errors.New("empty string invalid")
@@ -362,7 +360,7 @@ func (c *Client) SendAllAuthorized(message string) (int, error) {
 	}
 	for _, sc := range clients {
 		sc.Lock()
-		if !sc.authorized {
+		if sc.authorized != authorized {
 			sc.Unlock()
 			continue
 		}
@@ -376,6 +374,18 @@ func (c *Client) SendAllAuthorized(message string) (int, error) {
 		return count, errors.New("sent to no clients")
 	}
 	return count, nil
+}
+
+// Send text message to all authorized clients.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (c *Client) SendAllAuthorized(message string) (int, error) {
+	return c.send_authorized(message, true)
+}
+
+// Send text message to all unauthorized clients.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (c *Client) SendAllUnauthorized(message string) (int, error) {
+	return c.send_authorized(message, false)
 }
 
 // Gets the client ID.
