@@ -71,7 +71,6 @@ func (c *Client) readln() (string, error) {
 	return stringFormatWithBS(message), err
 }
 
-// Read client data until disconnected
 func (c *Client) listen() {
 	c.Lock()
 	c.authorized = true
@@ -159,7 +158,7 @@ func (c *Client) readprompt(prompt string) (string, bool) {
 }
 
 // Read a line of data from a client, and prompt them what to enter.
-func (c *Client) Read_prompt(prompt string) (string, bool) {
+func (c *Client) ReadPrompt(prompt string) (string, bool) {
 	prompt = strings.Trim(prompt, "\r\n")
 	if prompt != "" {
 		prompt += "\r\n"
@@ -176,7 +175,7 @@ func (c *Client) Read_prompt(prompt string) (string, bool) {
 }
 
 // Get a yes or no prompt from the client.
-func (c *Client) Read_confirm(prompt string) (bool, bool) {
+func (c *Client) ReadPromptConfirm(prompt string) (bool, bool) {
 	prompthead := ""
 	prompt = strings.Trim(prompt, "\r\n")
 	if prompt != "" {
@@ -216,7 +215,7 @@ loop:
 }
 
 // Give a client an option to select from a menu.
-func (c *Client) Read_menu(prompt string, menu []string) (int, bool) {
+func (c *Client) ReadPromptMenu(prompt string, menu []string) (int, bool) {
 	prompt = strings.Trim(prompt, "\r\n")
 	if prompt != "" {
 		prompt += "\r\n"
@@ -411,7 +410,7 @@ func (c *Client) close() error {
 			c.Unlock()
 		}
 		s.remove(c.id)
-		c.Data_clear()
+		c.DataClear()
 	} else {
 		err = errors.New("already disconnected")
 		c.Unlock()
@@ -432,7 +431,7 @@ func (c *Client) Server() *Server {
 }
 
 // Set a data value.
-func (c *Client) Data_set(key string, value interface{}) {
+func (c *Client) DataSet(key string, value interface{}) {
 	c.dbl.Lock()
 	defer c.dbl.Unlock()
 	if c.db == nil {
@@ -445,14 +444,14 @@ func (c *Client) Data_set(key string, value interface{}) {
 // To correctly use this in your programs,
 // you will need to call it with a type assertion.
 // For example,
-// time, found := c.Data_get("time").(time.Time)
+// time, found := c.DataGet("time").(time.Time)
 // if !found {
 // do something here.
 // } else {
 // return time
 // }
 
-func (c *Client) Data_get(key string) interface{} {
+func (c *Client) DataGet(key string) interface{} {
 	c.dbl.Lock()
 	defer c.dbl.Unlock()
 	if _, exists := c.db[key]; !exists {
@@ -462,7 +461,7 @@ func (c *Client) Data_get(key string) interface{} {
 }
 
 // Clears the client database.
-func (c *Client) Data_clear() {
+func (c *Client) DataClear() {
 	c.dbl.Lock()
 	defer c.dbl.Unlock()
 	c.db = nil
@@ -522,7 +521,6 @@ func (s *Server) Stop() {
 	}
 }
 
-// Process accepting clients until the server is shut down.
 func (s *Server) process() {
 	defer s.wg.Done()
 	s.accept()
@@ -533,7 +531,6 @@ func (s *Server) Wait() {
 	s.wg.Wait()
 }
 
-// Accept client connections.
 func (s *Server) accept() {
 	s.Lock()
 	listener := s.listener
@@ -557,7 +554,6 @@ func (s *Server) accept() {
 	}
 }
 
-// Sorts client connections by increasing ID.
 func (s *Server) clients_sorted() []*Client {
 	clients := []*Client{}
 	ids := []float64{}
