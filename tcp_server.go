@@ -668,4 +668,3 @@ func stringFormatWithBS(str string) string {
 func host_check(host string) string {
 	return strings.TrimSuffix(host, ".")
 }
-
