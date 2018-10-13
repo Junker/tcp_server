@@ -15,26 +15,26 @@ import (
 // It should never be necessary to interact with any variables within this type directly.
 type Client struct {
 	sync.Mutex
-	conn             net.Conn
-	connected        bool
-	authorized       bool
-	listening        bool
-	callback_running bool
-	ip               string
-	host             string
-	host_cached      bool
-	r                *bufio.Reader
-	p                sync.Mutex
-	pmsg             chan string
-	prompt           bool
-	w                *bufio.Writer
-	id               float64
-	server           *Server
-	db               map[string]interface{}
-	dbl              sync.Mutex
+	conn            net.Conn
+	connected       bool
+	authorized      bool
+	listening       bool
+	callbackRunning bool
+	ip              string
+	host            string
+	hostCached      bool
+	r               *bufio.Reader
+	p               sync.Mutex
+	pmsg            chan string
+	prompt          bool
+	w               *bufio.Writer
+	id              float64
+	server          *Server
+	db              map[string]interface{}
+	dbl             sync.Mutex
 }
 
-// TCP server instance.
+// server instance.
 //It should not be necessary to interact with any of these variables directly.
 type Server struct {
 	sync.Mutex
@@ -80,7 +80,7 @@ func (c *Client) listen() {
 		recover()
 		c.Lock()
 		c.listening = false
-		c.callback_running = false
+		c.callbackRunning = false
 		c.Unlock()
 	}()
 	for {
@@ -97,12 +97,12 @@ func (c *Client) listen() {
 		}
 		c.Lock()
 		c.listening = false
-		c.callback_running = true
+		c.callbackRunning = true
 		c.Unlock()
 		c.server.onNewMessage(c, message)
 		c.Lock()
 		c.listening = true
-		c.callback_running = false
+		c.callbackRunning = false
 		c.Unlock()
 	}
 }
@@ -111,7 +111,7 @@ func (c *Client) listen() {
 // Exiting the goroutine yourself will cause the program to stop sending messages to your function for receiving client messages, but exiting this function will ensure messages are still received, while at the same time, exiting the goroutine.
 func (c *Client) Stop() {
 	c.Lock()
-	listener := c.callback_running
+	listener := c.callbackRunning
 	c.Unlock()
 	if !listener {
 		return
@@ -276,7 +276,7 @@ func (c *Client) IP() string {
 func (c *Client) Host() string {
 	c.Lock()
 	defer c.Unlock()
-	if c.host_cached {
+	if c.hostCached {
 		return c.host
 	}
 	ip := c.ip
@@ -288,19 +288,19 @@ func (c *Client) Host() string {
 	}
 	if len(hosts) == 1 {
 		c.Lock()
-		c.host = host_check(hosts[0])
-		c.host_cached = true
+		c.host = hostCheck(hosts[0])
+		c.hostCached = true
 		return c.host
 	} else {
 		c.Lock()
 		for i, host := range hosts {
 			if i+1 != len(hosts) {
-				c.host += host_check(host) + ", "
+				c.host += hostCheck(host) + ", "
 			} else {
-				c.host += host_check(host)
+				c.host += hostCheck(host)
 			}
 		}
-		c.host_cached = true
+		c.hostCached = true
 	}
 	return c.host
 }
@@ -329,7 +329,7 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	if message == "" {
 		return count, errors.New("empty string invalid")
 	}
-	clients := c.server.clients_sorted()
+	clients := c.server.clientsSorted()
 	if len(clients) == 0 {
 		return count, errors.New("no clients available")
 	}
@@ -348,12 +348,12 @@ func (c *Client) SendAll(message string, excluded *Client) (int, error) {
 	return count, nil
 }
 
-func (c *Client) send_authorized(message string, authorized bool) (int, error) {
+func (c *Client) sendAuthorized(message string, authorized bool) (int, error) {
 	count := 0
 	if message == "" {
 		return count, errors.New("empty string invalid")
 	}
-	clients := c.server.clients_sorted()
+	clients := c.server.clientsSorted()
 	if len(clients) == 0 {
 		return count, errors.New("no clients available")
 	}
@@ -378,13 +378,13 @@ func (c *Client) send_authorized(message string, authorized bool) (int, error) {
 // Send text message to all authorized clients.
 // Returns the number of clients data was sent to, and an error if the number is 0.
 func (c *Client) SendAllAuthorized(message string) (int, error) {
-	return c.send_authorized(message, true)
+	return c.sendAuthorized(message, true)
 }
 
 // Send text message to all unauthorized clients.
 // Returns the number of clients data was sent to, and an error if the number is 0.
 func (c *Client) SendAllUnauthorized(message string) (int, error) {
-	return c.send_authorized(message, false)
+	return c.sendAuthorized(message, false)
 }
 
 // Gets the client ID.
@@ -554,7 +554,7 @@ func (s *Server) accept() {
 	}
 }
 
-func (s *Server) clients_sorted() []*Client {
+func (s *Server) clientsSorted() []*Client {
 	clients := []*Client{}
 	ids := []float64{}
 	s.Lock()
@@ -576,12 +576,12 @@ func (s *Server) clients_sorted() []*Client {
 
 // Returns the clients in there connection order.
 func (s *Server) Clients() []*Client {
-	return s.clients_sorted()
+	return s.clientsSorted()
 }
 
 // Sends a message to all connected clients.
 func (s *Server) SendAll(message string) (int, error) {
-	clients := s.clients_sorted()
+	clients := s.clientsSorted()
 	count := 0
 	if message == "" {
 		return count, errors.New("empty message not allowed")
@@ -665,6 +665,6 @@ func stringFormatWithBS(str string) string {
 	return ts
 }
 
-func host_check(host string) string {
+func hostCheck(host string) string {
 	return strings.TrimSuffix(host, ".")
 }
