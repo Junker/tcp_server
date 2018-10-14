@@ -182,7 +182,7 @@ func Test_multiple_clients(t *testing.T) {
 	//Wait for the server to finish calling our functions.
 	time.Sleep(time.Millisecond * 10)
 
-	count, err := server.SendAll(messageTest)
+	count, err := server.SendAll(messageTest, nil)
 	if err != nil {
 		t.Error("Failed to send message to all connected clients.\r\n" + err.Error())
 	}
@@ -195,7 +195,7 @@ func Test_multiple_clients(t *testing.T) {
 	//Wait for the server to finish calling our functions.
 	time.Sleep(time.Millisecond * 10)
 
-	count, err = server.SendAll(messageTest)
+	count, err = server.SendAll(messageTest, nil)
 
 	if err == nil {
 		t.Error("Error not registered. Sending to closed connections should fail.")

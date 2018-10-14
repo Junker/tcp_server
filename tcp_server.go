@@ -325,66 +325,19 @@ func (c *Client) Send(message string) error {
 // Set excluded to nill to send to all clients.
 // Returns the number of clients data was sent to, and an error if the number is 0.
 func (c *Client) SendAll(message string, excluded *Client) (int, error) {
-	count := 0
-	if message == "" {
-		return count, errors.New("empty string invalid")
-	}
-	clients := c.server.clientsSorted()
-	if len(clients) == 0 {
-		return count, errors.New("no clients available")
-	}
-	for _, sc := range clients {
-		if excluded != nil && sc == excluded {
-			continue
-		}
-		err := sc.Send(message)
-		if err == nil {
-			count++
-		}
-	}
-	if count == 0 {
-		return count, errors.New("sent to no clients")
-	}
-	return count, nil
+	return c.server.SendAll(message, excluded)
 }
 
-func (c *Client) sendAuthorized(message string, authorized bool) (int, error) {
-	count := 0
-	if message == "" {
-		return count, errors.New("empty string invalid")
-	}
-	clients := c.server.clientsSorted()
-	if len(clients) == 0 {
-		return count, errors.New("no clients available")
-	}
-	for _, sc := range clients {
-		sc.Lock()
-		if sc.authorized != authorized {
-			sc.Unlock()
-			continue
-		}
-		sc.Unlock()
-		err := sc.Send(message)
-		if err == nil {
-			count++
-		}
-	}
-	if count == 0 {
-		return count, errors.New("sent to no clients")
-	}
-	return count, nil
-}
-
-// Send text message to all authorized clients.
+// Send text message to all authorized clients, except the excluded client.
 // Returns the number of clients data was sent to, and an error if the number is 0.
-func (c *Client) SendAllAuthorized(message string) (int, error) {
-	return c.sendAuthorized(message, true)
+func (c *Client) SendAllAuthorized(message string, excluded *Client) (int, error) {
+	return c.server.SendAllAuthorized(message, excluded)
 }
 
-// Send text message to all unauthorized clients.
+// Send text message to all unauthorized clients, except the excluded client.
 // Returns the number of clients data was sent to, and an error if the number is 0.
-func (c *Client) SendAllUnauthorized(message string) (int, error) {
-	return c.sendAuthorized(message, false)
+func (c *Client) SendAllUnauthorized(message string, excluded *Client) (int, error) {
+	return c.server.SendAllUnauthorized(message, excluded)
 }
 
 // Gets the client ID.
@@ -579,27 +532,6 @@ func (s *Server) Clients() []*Client {
 	return s.clientsSorted()
 }
 
-// Sends a message to all connected clients.
-func (s *Server) SendAll(message string) (int, error) {
-	clients := s.clientsSorted()
-	count := 0
-	if message == "" {
-		return count, errors.New("empty message not allowed")
-	}
-	if len(clients) == 0 {
-		return count, errors.New("no clients connected")
-	}
-	for _, c := range clients {
-		if c.Send(message) == nil {
-			count++
-		}
-	}
-	if count == 0 {
-		return count, errors.New("message failed to send to connected clients")
-	}
-	return count, nil
-}
-
 func (s *Server) add(c *Client) {
 	s.Lock()
 	s.clients[s.maxid] = c
@@ -622,6 +554,75 @@ func (s *Server) remove(cid float64) {
 	}
 	s.Unlock()
 	s.wg.Done()
+}
+
+// Send text message to all clients accept the client excluded.
+// Set excluded to nill to send to all clients.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (s *Server) SendAll(message string, excluded *Client) (int, error) {
+	count := 0
+	if message == "" {
+		return count, errors.New("empty string invalid")
+	}
+	clients := s.clientsSorted()
+	if len(clients) == 0 {
+		return count, errors.New("no clients available")
+	}
+	for _, sc := range clients {
+		if excluded != nil && sc == excluded {
+			continue
+		}
+		err := sc.Send(message)
+		if err == nil {
+			count++
+		}
+	}
+	if count == 0 {
+		return count, errors.New("sent to no clients")
+	}
+	return count, nil
+}
+
+func (s *Server) sendAuthorized(message string, excluded *Client, authorized bool) (int, error) {
+	count := 0
+	if message == "" {
+		return count, errors.New("empty string invalid")
+	}
+	clients := s.clientsSorted()
+	if len(clients) == 0 {
+		return count, errors.New("no clients available")
+	}
+	for _, sc := range clients {
+		sc.Lock()
+		if sc.authorized != authorized {
+			sc.Unlock()
+			continue
+		}
+		sc.Unlock()
+		if excluded != nil && sc == excluded {
+			continue
+		}
+		err := sc.Send(message)
+		if err == nil {
+			count++
+		}
+	}
+	if count == 0 {
+		return count, errors.New("sent to no clients")
+	}
+	return count, nil
+}
+
+// Send text message to all authorized clients, except the excluded client.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (s *Server) SendAllAuthorized(message string, excluded *Client) (int, error) {
+	return s.sendAuthorized(message, excluded, true)
+}
+
+// Send text message to all unauthorized clients, except the excluded client.
+// Returns the number of clients data was sent to, and an error if the number is 0.
+func (s *Server) SendAllUnauthorized(message string, excluded *Client) (int, error) {
+	return s.sendAuthorized(message, excluded, false)
 }
 
 // Creates new tcp server instance
