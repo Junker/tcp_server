@@ -3,8 +3,10 @@ package tcp_server
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"net"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,7 +79,11 @@ func (c *Client) listen() {
 	c.listening = true
 	c.Unlock()
 	defer func() {
-		recover()
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from", r)
+			debug.PrintStack()
+			c.close()
+		}
 		c.Lock()
 		c.listening = false
 		c.callbackRunning = false
@@ -359,9 +365,9 @@ func (c *Client) close() error {
 			c.authorized = false
 			c.Unlock()
 			s.onClientConnectionClosed(c, err)
-		} else {
-			c.Unlock()
+			c.Lock()
 		}
+		c.Unlock()
 		s.remove(c.id)
 		c.DataClear()
 	} else {
