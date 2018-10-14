@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -80,8 +81,8 @@ func (c *Client) listen() {
 	c.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered from", r)
-			debug.PrintStack()
+			fmt.Fprintln(os.Stderr, "Recovered from", r)
+			fmt.Fprintln(os.Stderr, debug.Stack())
 			c.close()
 		}
 		c.Lock()
