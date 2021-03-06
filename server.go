@@ -2,6 +2,7 @@ package tcp_server
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"net"
 	"sort"
@@ -16,6 +17,7 @@ type Server struct {
 	clients                  map[float64]*Client
 	address                  string
 	listener                 *net.Listener
+	config                   *tls.Config
 	started                  bool
 	maxid                    float64
 	onNewClient              func(c *Client) bool
@@ -52,7 +54,13 @@ func (s *Server) Start() error {
 	if s.started {
 		return errors.New("already started")
 	}
-	listener, err := net.Listen("tcp", s.address)
+	var err error
+	var listener net.Listener
+	if s.config == nil {
+		listener, err = net.Listen("tcp", s.address)
+	} else {
+		listener, err = tls.Listen("tcp", s.address, s.config)
+	}
 	if err != nil {
 		return err
 	}
@@ -232,6 +240,7 @@ func (s *Server) SendAllUnauthorized(message string, excluded *Client) (int, err
 func New(address string) *Server {
 	server := &Server{
 		address: address,
+		config:  nil,
 		clients: make(map[float64]*Client, 0),
 		maxid:   1,
 	}
@@ -242,5 +251,15 @@ func New(address string) *Server {
 	server.OnNewMessage(func(c *Client, message string) {})
 	server.OnClientConnectionClosed(func(c *Client, err error) {})
 
+	return server
+}
+
+func NewWithTLS(address string, certFile string, keyFile string) *Server {
+	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
+	config := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	server := New(address)
+	server.config = config
 	return server
 }
