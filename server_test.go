@@ -80,7 +80,10 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to connect to test server. Couldn't test client messages being accepted and processed.", err)
 	}
-	conn.Write([]byte(messageTest + "\n"))
+	_, err = conn.Write([]byte(messageTest + "\n"))
+	if err != nil {
+		t.Fatal("Unable to write message to the server.", err)
+	}
 	messageTextReceived, err = bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
 		t.Fatal("Failed to receive message for processing.", err)
@@ -136,7 +139,10 @@ func Test_rejecting_new_client_callback(t *testing.T) {
 		t.Fatal("Failed to connect to test server. Couldn't test client connection rejection.", err)
 	}
 
-	conn.Write([]byte(messageTest))
+	_, err = conn.Write([]byte(messageTest))
+	if err != nil {
+		t.Fatal("No error received, but we should have received an error.")
+	}
 	conn.Close()
 	//Wait for the server to finish executing our functions.
 	time.Sleep(time.Millisecond * 10)
@@ -190,7 +196,10 @@ func Test_multiple_clients(t *testing.T) {
 		t.Error("Failed to send message to the number of clients connected.\r\nSent to " + strconv.Itoa(count) + " clients, and expected to send to " + strconv.Itoa(number) + " clients.")
 	}
 	for _, conn := range clients {
-		(*conn).Close()
+		err = (*conn).Close()
+		if err != nil {
+			t.Error("Failed to close a client connection.", err)
+		}
 	}
 	//Wait for the server to finish calling our functions.
 	time.Sleep(time.Millisecond * 10)

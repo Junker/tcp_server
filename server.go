@@ -75,7 +75,10 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	s.Lock()
 	defer s.Unlock()
-	(*s.listener).Close()
+	err := (*s.listener).Close()
+	if err != nil {
+		return
+	}
 	for _, c := range s.clients {
 		if c != nil {
 			s.Unlock()
@@ -183,8 +186,8 @@ func (s *Server) SendAll(message string, excluded *Client) (int, error) {
 		if excluded != nil && sc == excluded {
 			continue
 		}
-		err := sc.Send(message)
-		if err == nil {
+		sent := sc.Send(message)
+		if sent {
 			count++
 		}
 	}
@@ -213,8 +216,8 @@ func (s *Server) sendAuthorized(message string, excluded *Client, authorized boo
 		if excluded != nil && sc == excluded {
 			continue
 		}
-		err := sc.Send(message)
-		if err == nil {
+		sent := sc.Send(message)
+		if sent {
 			count++
 		}
 	}
@@ -241,7 +244,7 @@ func New(address string) *Server {
 	server := &Server{
 		address: address,
 		config:  nil,
-		clients: make(map[float64]*Client, 0),
+		clients: make(map[float64]*Client),
 		maxid:   1,
 	}
 

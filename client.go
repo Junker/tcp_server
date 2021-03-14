@@ -126,8 +126,8 @@ func (c *Client) readprompt(prompt string) (string, bool) {
 		c.Unlock()
 	}()
 	if prompt != "" {
-		err := c.Send(prompt)
-		if err != nil {
+		sent := c.Send(prompt)
+		if !sent {
 			return "", true
 		}
 	}
@@ -297,19 +297,19 @@ func (c *Client) Host() string {
 }
 
 // Send text message to client
-func (c *Client) Send(message string) error {
+func (c *Client) Send(message string) bool {
 	message = strings.Trim(message, "\r\n") + "\r\n"
 	if message == "\r\n" {
-		return errors.New("empty string invalid")
+		return false
 	}
 	c.Lock()
-	c.w.WriteString(message)
+	_, wErr := c.w.WriteString(message)
 	err := c.w.Flush()
 	c.Unlock()
-	if err != nil {
+	if err != nil || wErr != nil {
 		c.close()
 	}
-	return err
+	return true
 }
 
 // Send text message to all clients accept the client excluded.
