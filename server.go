@@ -16,7 +16,7 @@ type Server struct {
 	wg                       sync.WaitGroup
 	clients                  map[float64]*Client
 	address                  string
-	listener                 *net.Listener
+	listener                 net.Listener
 	config                   *tls.Config
 	started                  bool
 	maxid                    float64
@@ -65,7 +65,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.started = true
-	s.listener = &listener
+	s.listener = listener
 	s.wg.Add(1)
 	go s.process()
 	return err
@@ -75,7 +75,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	s.Lock()
 	defer s.Unlock()
-	err := (*s.listener).Close()
+	err := s.listener.Close()
 	if err != nil {
 		return
 	}
@@ -99,11 +99,8 @@ func (s *Server) Wait() {
 }
 
 func (s *Server) accept() {
-	s.Lock()
-	listener := s.listener
-	s.Unlock()
 	for {
-		conn, err := (*listener).Accept()
+		conn, err := s.listener.Accept()
 		if err != nil {
 			return
 		}
