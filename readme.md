@@ -25,13 +25,15 @@ func main() {
 	server.OnNewClient(func(c *tcp_server.Client) {
 		// new client connected
 		// lets send some message
-		c.Send("Hello")
+		c.Send("Hello\n")
 	})
 	server.OnNewMessage(func(c *tcp_server.Client, message string) {
 		// new message received
 	})
-	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
+	server.OnClientConnectionClosed(func(c *tcp_server.Client) {
 		// connection with client lost
+		// Stop the server
+		server.Stop()
 	})
 
 	server.Listen()
