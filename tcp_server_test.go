@@ -12,7 +12,10 @@ const test_time_ms = 10
 
 var server *Server
 
+var goroutines int
+
 func Test_accepting_new_client_callback(t *testing.T) {
+	goroutines = runtime.NumGoroutine()
 	server = New("localhost:9999")
 
 	var wg sync.WaitGroup
@@ -141,5 +144,9 @@ func Test_server_stop(t *testing.T) {
 	_, err := net.Dial("tcp", "localhost:9999")
 	if err == nil {
 		t.Fatal("Connected to test server, which should be stopped.")
+	}
+	cur_goroutines := runtime.NumGoroutine()
+	if goroutines != cur_goroutines {
+		t.Fatal("We have leaked goroutines. When we started, the goroutines were", goroutines, "and they are now numbered at", cur_goroutines)
 	}
 }
