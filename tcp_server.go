@@ -118,6 +118,11 @@ func (s *Server) Listen() {
 	s.ctx, s.Stop = context.WithCancel(mctx)
 	s.Add(1)
 	s.Unlock()
+	go s.accept(listener)
+	s.Wait()
+}
+
+func (s *Server) accept(listener net.Listener) {
 	// Stopping our server.
 	go func() {
 		<-s.ctx.Done()
@@ -141,7 +146,6 @@ func (s *Server) Listen() {
 		s.Unlock()
 		go client.listen()
 	}
-	s.Wait()
 }
 
 // Creates new tcp server instance
