@@ -11,12 +11,13 @@ import (
 const test_time_ms = 10
 
 var server *Server
+var address = "localhost:9999"
 
 var goroutines int
 
 func Test_accepting_new_client_callback(t *testing.T) {
 	goroutines = runtime.NumGoroutine()
-	server = New("localhost:9999")
+	server = New(address)
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -33,13 +34,15 @@ func Test_accepting_new_client_callback(t *testing.T) {
 	server.OnClientConnectionClosed(func(c *Client) {
 		wg.Done()
 	})
-	go server.Listen()
-
+	s_init := server.Listen()
+	if s_init != nil {
+		t.Fatal("Unable to start server on", address+"\r\nError:", s_init)
+	}
 	// Wait for server
 	// If test fails - increase this value
 	time.Sleep(test_time_ms * time.Millisecond)
 
-	conn, err := net.Dial("tcp", "localhost:9999")
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		t.Fatal("Failed to connect to test server")
 	}
@@ -74,7 +77,7 @@ func Test_accepting_new_client_callback_different_terminator(t *testing.T) {
 	})
 	server.MessageTerminator('\u0000')
 
-	conn, err := net.Dial("tcp", "localhost:9999")
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		t.Fatal("Failed to connect to test server")
 	}
@@ -106,7 +109,7 @@ func Test_concurrency(t *testing.T) {
 	server.OnClientConnectionClosed(func(c *Client) {
 	})
 
-	conn, err := net.Dial("tcp", "localhost:9999")
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		t.Fatal("Failed to connect to test server")
 	}
@@ -141,12 +144,12 @@ func Test_server_stop(t *testing.T) {
 	// If test fails - increase this value
 	time.Sleep(test_time_ms * time.Millisecond)
 
-	_, err := net.Dial("tcp", "localhost:9999")
+	_, err := net.Dial("tcp", address)
 	if err == nil {
 		t.Fatal("Connected to test server, which should be stopped.")
 	}
 	cur_goroutines := runtime.NumGoroutine()
-	if goroutines != cur_goroutines {
+	if goroutines < cur_goroutines {
 		t.Fatal("We have leaked goroutines. When we started, the goroutines were", goroutines, "and they are now numbered at", cur_goroutines)
 	}
 }

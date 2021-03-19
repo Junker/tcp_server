@@ -36,7 +36,11 @@ func main() {
 		server.Stop()
 	})
 
-	server.Listen()
+	err := server.Listen()
+	if err != nil {
+		panick(err) // do something else with this error in production
+	}
+	server.Wait()
 }
 ```
 

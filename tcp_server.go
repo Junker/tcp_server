@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"log"
 	"net"
 	"sync"
 )
@@ -99,7 +98,7 @@ func (s *Server) MessageTerminator(terminator byte) {
 }
 
 // Listen starts network server
-func (s *Server) Listen() {
+func (s *Server) Listen() error {
 	s.Lock()
 	var listener net.Listener
 	var err error
@@ -112,14 +111,14 @@ func (s *Server) Listen() {
 		listener, err = tls.Listen("tcp", address, config)
 	}
 	if err != nil {
-		log.Fatal("Error starting TCP server.\r\n", err)
+		return err
 	}
 	s.Lock()
 	s.ctx, s.Stop = context.WithCancel(mctx)
 	s.Add(1)
 	s.Unlock()
 	go s.accept(listener)
-	s.Wait()
+	return err
 }
 
 func (s *Server) accept(listener net.Listener) {
@@ -150,7 +149,6 @@ func (s *Server) accept(listener net.Listener) {
 
 // Creates new tcp server instance
 func New(address string) *Server {
-	log.Println("Creating server with address", address)
 	server := &Server{
 		address:           address,
 		messageTerminator: '\n',
@@ -163,15 +161,15 @@ func New(address string) *Server {
 	return server
 }
 
-func NewWithTLS(address, certFile, keyFile string) *Server {
+func NewWithTLS(address, certFile, keyFile string) (*Server, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.Fatal("Error loading certificate files. Unable to create TCP server with TLS functionality.\r\n", err)
+		return nil, err
 	}
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
 	server := New(address)
 	server.config = config
-	return server
+	return server, nil
 }
